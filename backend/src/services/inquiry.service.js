@@ -215,7 +215,11 @@ export function createInquiryService({
     const inquiry = await findInquiryOrFail(id, { transaction });
     const [notes, activities, assignedAdmin] = await Promise.all([
       InquiryNote.findAll({ where: { inquiryId: id }, order: [['createdAt', 'ASC']], transaction }),
-      InquiryActivity.findAll({ where: { inquiryId: id }, order: [['createdAt', 'ASC']], transaction }),
+      InquiryActivity.findAll({
+        where: { inquiryId: id },
+        order: [['createdAt', 'ASC']],
+        transaction,
+      }),
       inquiry.assignedAdminId ? Admin.findByPk(inquiry.assignedAdminId, { transaction }) : null,
     ]);
 
@@ -229,16 +233,13 @@ export function createInquiryService({
       adminEmail: null,
       createdAt: inquiry.createdAt,
     };
-    const timeline = [
-      received,
-      ...activityRows.filter((row) => row.type !== 'received'),
-    ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const timeline = [received, ...activityRows.filter((row) => row.type !== 'received')].sort(
+      (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+    );
 
     return {
       ...inquiry.get({ plain: true }),
-      assignedAdmin: assignedAdmin
-        ? { id: assignedAdmin.id, email: assignedAdmin.email }
-        : null,
+      assignedAdmin: assignedAdmin ? { id: assignedAdmin.id, email: assignedAdmin.email } : null,
       notes: notes.map((row) => {
         const note = row.get({ plain: true });
         return {
@@ -295,7 +296,8 @@ export function createInquiryService({
           let nextAdmin = null;
           if (nextId) {
             nextAdmin = await Admin.findByPk(nextId, { transaction });
-            if (!nextAdmin) throw new AppError(422, 'INVALID_ASSIGNEE', 'That administrator does not exist');
+            if (!nextAdmin)
+              throw new AppError(422, 'INVALID_ASSIGNEE', 'That administrator does not exist');
           }
           changes.assignedAdminId = nextId;
           activityWrites.push(

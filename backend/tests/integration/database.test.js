@@ -11,7 +11,11 @@ import { QueryTypes } from 'sequelize';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../../src/config/database.js';
 import { BACKEND_ROOT, loadDatabaseConfig, loadDotenv } from '../../src/config/env.js';
-import { COLUMNS_QUERY, compareModelsToColumns } from '../../src/models/schemaComparison.js';
+import {
+  buildColumnsQuery,
+  compareModelsToColumns,
+  modelTableNames,
+} from '../../src/models/schemaComparison.js';
 import { createInquiryService } from '../../src/services/inquiry.service.js';
 import { silentLogger } from '../../src/utils/logger.js';
 
@@ -37,7 +41,8 @@ describe.skipIf(!TEST_DATABASE_URL)('database integration (TEST_DATABASE_URL)', 
   });
 
   it('has tables matching the models', async () => {
-    const rows = await db.sequelize.query(COLUMNS_QUERY, { type: QueryTypes.SELECT });
+    const { sql, bind } = buildColumnsQuery(modelTableNames(db.models));
+    const rows = await db.sequelize.query(sql, { type: QueryTypes.SELECT, bind });
     expect(compareModelsToColumns(db.models, rows)).toEqual([]);
   });
 

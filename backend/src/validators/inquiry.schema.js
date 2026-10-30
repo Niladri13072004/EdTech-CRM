@@ -212,11 +212,22 @@ const nullableUuid = z.preprocess(
   z.uuid({ error: 'Assigned administrator must be a valid id' }).nullable().optional(),
 );
 
+/**
+ * True only for a real calendar date in YYYY-MM-DD form. The pattern alone
+ * would accept impossible dates (2026-02-31); PostgreSQL would then reject
+ * them, surfacing as a 500 instead of a field error.
+ */
+function isCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 const nullableDate = z.preprocess(
   (value) => (value === '' ? null : value),
   z
     .string({ error: 'Follow-up date must be a date' })
-    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: 'Follow-up date must use YYYY-MM-DD' })
+    .refine(isCalendarDate, { error: 'Follow-up date must be a real date (YYYY-MM-DD)' })
     .nullable()
     .optional(),
 );

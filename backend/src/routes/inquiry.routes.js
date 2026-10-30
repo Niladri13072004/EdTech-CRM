@@ -37,7 +37,11 @@ export function createInquiryRouter({ inquiryService, config, security }) {
   // Fixed paths before /:id, which only accepts UUIDs.
   router.get('/stats', validate({ query: emptyQuerySchema }), controller.stats);
   router.get('/export', validate({ query: exportInquiriesQuerySchema }), controller.exportCsv);
-  router.get('/assignable-admins', validate({ query: emptyQuerySchema }), controller.assignableAdmins);
+  router.get(
+    '/assignable-admins',
+    validate({ query: emptyQuerySchema }),
+    controller.assignableAdmins,
+  );
   router.get('/:id', validate({ params: uuidParamSchema }), controller.show);
   router.post(
     '/:id/notes',

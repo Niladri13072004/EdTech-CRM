@@ -1397,8 +1397,14 @@ fieldset {
 }
 
 @keyframes drawer-in {
-  from { transform: translateX(24px); opacity: 0; }
-  to { transform: none; opacity: 1; }
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
 }
 
 .drawer__header {
@@ -1576,7 +1582,7 @@ fieldset {
 }
 
 .timeline__item:not(:last-child)::before {
-  content: "";
+  content: '';
   position: absolute;
   top: 1rem;
   bottom: 0;
@@ -1598,11 +1604,27 @@ fieldset {
   box-shadow: 0 0 0 1px var(--color-primary);
 }
 
-.timeline__dot--received { background: var(--color-info); box-shadow: 0 0 0 1px var(--color-info); }
-.timeline__dot--status { background: var(--color-warning); box-shadow: 0 0 0 1px var(--color-warning); }
-.timeline__dot--note { background: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary); }
-.timeline__dot--assignment { background: var(--color-success); box-shadow: 0 0 0 1px var(--color-success); }
-.timeline__dot--follow_up, .timeline__dot--outcome { background: var(--color-warning); box-shadow: 0 0 0 1px var(--color-warning); }
+.timeline__dot--received {
+  background: var(--color-info);
+  box-shadow: 0 0 0 1px var(--color-info);
+}
+.timeline__dot--status {
+  background: var(--color-warning);
+  box-shadow: 0 0 0 1px var(--color-warning);
+}
+.timeline__dot--note {
+  background: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+.timeline__dot--assignment {
+  background: var(--color-success);
+  box-shadow: 0 0 0 1px var(--color-success);
+}
+.timeline__dot--follow_up,
+.timeline__dot--outcome {
+  background: var(--color-warning);
+  box-shadow: 0 0 0 1px var(--color-warning);
+}
 
 .timeline__summary {
   font-weight: 500;

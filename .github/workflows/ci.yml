@@ -1,0 +1,70 @@
+# Continuous integration: tests, lint, formatting and a production build.
+#
+# Deliberately self-contained. Every check here runs against PGlite (PostgreSQL
+# compiled to WebAssembly) or in-process doubles, so no Supabase project, no
+# DATABASE_URL and no repository secrets are required. The real-PostgreSQL
+# integration suite stays opt-in via TEST_DATABASE_URL.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Tests, lint, format and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      CI: 'true'
+      NODE_ENV: test
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Lint the backend
+        run: npm run lint --prefix backend
+
+      - name: Lint the frontend
+        run: npm run lint --prefix frontend
+
+      - name: Check backend formatting
+        run: npm run format:check --prefix backend
+
+      - name: Check frontend formatting
+        run: npm run format:check --prefix frontend
+
+      - name: Run backend tests
+        run: npm test --prefix backend
+
+      - name: Run frontend tests
+        run: npm test --prefix frontend
+
+      - name: Build the frontend
+        run: npm run build --prefix frontend

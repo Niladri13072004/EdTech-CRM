@@ -77,7 +77,7 @@ In production, one service serves both the pages and the API, so they share an o
 │   │   ├── app.js              Express app (middleware, /api router, optional React app serving)
 │   │   ├── server.js           startup: config → DB connection (with retries) → listen on PORT → graceful shutdown
 │   │   ├── config/             env.js (Zod-validated config), database.js (Sequelize, TLS), security and startup warnings
-│   │   ├── models/             Admin, Inquiry (explicit camelCase ↔ snake_case mappings)
+│   │   ├── models/             Admin, Inquiry, InquiryNote, InquiryActivity (explicit camelCase ↔ snake_case mappings)
 │   │   ├── routes/ controllers/ services/   health, auth, inquiries (list, stats, export, status)
 │   │   ├── middleware/         authenticate, requireTrustedOrigin (CSRF), rate limiters, validation, errors
 │   │   ├── validators/         Zod request schemas
@@ -102,7 +102,7 @@ In production, one service serves both the pages and the API, so they share an o
 - **`admins`**: `id` uuid PK, `email` unique (stored lower-case), `password_hash` (a CHECK accepts only bcrypt hashes), `created_at`.
 - **`inquiries`**: `id`, `name`, `email`, `phone` (text), `user_type` and `category` (CHECK allow-lists), `message`, `status` (CHECK New / In Progress / Resolved, default New), `created_at`, `updated_at` (kept current by a trigger).
 - **Indexes:** creation date, category + date, and user type + date.
-- **Row Level Security** is enabled with no policies, so Supabase's public REST API cannot read either table. The backend connects as the table owner and is unaffected.
+- **Row Level Security** is enabled with no policies, so Supabase's public REST API cannot read any of the four tables. The backend connects as the table owner and is unaffected.
 
 ---
 
@@ -138,7 +138,7 @@ In production, one service serves both the pages and the API, so they share an o
 
 ```bash
 git clone <your-repository-url>
-cd EdTech-CRM-and-Inquiry-System
+cd EdTech-CRM
 npm ci --prefix backend
 npm ci --prefix frontend
 ```
@@ -368,6 +368,9 @@ Run `unset PW TOKEN` and delete `cookies.txt` and `inquiries.csv` afterwards.
 | `npm run format:check --prefix backend`, `--prefix frontend` | Prettier |
 | `npm run build --prefix frontend` | production build into `frontend/dist` |
 | `npm run preview --prefix frontend` | serves the build locally with the production security headers |
+| `npm run db:check --prefix backend` | read-only: verifies every model table (all four) against `schema.sql` and that Row Level Security is on |
+
+GitHub Actions runs all of the above except the opt-in integration suite and the preview server on every push and pull request (`.github/workflows/ci.yml`). No Supabase credentials or repository secrets are needed, because everything runs against PGlite or in-process doubles.
 
 ---
 
@@ -442,7 +445,7 @@ Calling the API cross-site without a rewrite is **not recommended**. It would ne
 - **One role:** there is a single admin role, so admin management (password change, deletion) is done through the scripts or the database.
 - **Summary totals are unfiltered:** the summary cards and chart always cover all inquiries; only the table follows the filters.
 - **Export cap:** CSV export stops at 5000 rows; narrow the filters for larger exports.
-- **No CI pipeline** is configured.
+- **CI covers tests and static checks only:** GitHub Actions runs both test suites, ESLint, Prettier and the production build on every push and pull request. It does not touch Supabase or deploy anything.
 
 ---
 

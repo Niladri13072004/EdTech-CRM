@@ -500,7 +500,10 @@ describe('inquiry details, notes and follow-up', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject({ id: target().id, message: target().message });
     expect(res.body.data.notes).toEqual([]);
-    expect(res.body.data.activities[0]).toMatchObject({ type: 'received', summary: 'Inquiry received.' });
+    expect(res.body.data.activities[0]).toMatchObject({
+      type: 'received',
+      summary: 'Inquiry received.',
+    });
   });
 
   it('adds a note with the signed-in admin and records it in the timeline', async () => {
@@ -533,14 +536,11 @@ describe('inquiry details, notes and follow-up', () => {
     expect(admins.status).toBe(200);
     expect(admins.body.data.some((item) => item.email === 'ops@school.org')).toBe(true);
 
-    const res = await agent
-      .patch(`/api/inquiries/${target().id}`)
-      .set('Origin', TEST_ORIGIN)
-      .send({
-        status: 'In Progress',
-        followUpDate: '2026-11-02',
-        followUpOutcome: 'Parent requested a callback.',
-      });
+    const res = await agent.patch(`/api/inquiries/${target().id}`).set('Origin', TEST_ORIGIN).send({
+      status: 'In Progress',
+      followUpDate: '2026-11-02',
+      followUpOutcome: 'Parent requested a callback.',
+    });
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject({ status: 'In Progress', followUpDate: '2026-11-02' });
     expect(res.body.data.followUpOutcome).toBe('Parent requested a callback.');

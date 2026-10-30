@@ -6,22 +6,27 @@
 // Usage (from backend/):  npm run db:check
 
 import { QueryTypes } from 'sequelize';
-import { COLUMNS_QUERY, compareModelsToColumns } from '../src/models/schemaComparison.js';
+import {
+  buildColumnsQuery,
+  buildRlsQuery,
+  compareModelsToColumns,
+  modelTableNames,
+} from '../src/models/schemaComparison.js';
 import { withDatabase } from './lib/withDatabase.js';
 
 await withDatabase(async ({ db, logger }) => {
   const query = (sql) => db.sequelize.query(sql, { type: QueryTypes.SELECT });
+  const queryBound = ({ sql, bind }) => db.sequelize.query(sql, { type: QueryTypes.SELECT, bind });
 
   const [{ version }] = await query('SELECT version()');
   logger.info('Connected', { server: version.split(',')[0] });
 
-  const problems = compareModelsToColumns(db.models, await query(COLUMNS_QUERY));
+  // Every table a model maps to, so a newly registered model cannot be missed.
+  const tables = modelTableNames(db.models);
 
-  const rls = await query(`
-    SELECT relname, relrowsecurity
-    FROM pg_class
-    WHERE relnamespace = 'public'::regnamespace AND relname IN ('admins', 'inquiries')
-  `);
+  const problems = compareModelsToColumns(db.models, await queryBound(buildColumnsQuery(tables)));
+
+  const rls = await queryBound(buildRlsQuery(tables));
   for (const { relname, relrowsecurity } of rls) {
     if (!relrowsecurity) problems.push(`${relname}: Row Level Security is not enabled`);
   }
@@ -33,8 +38,17 @@ await withDatabase(async ({ db, logger }) => {
     });
   }
 
-  const [{ admins, inquiries }] = await query(
-    'SELECT (SELECT count(*) FROM public.admins)::int AS admins, (SELECT count(*) FROM public.inquiries)::int AS inquiries',
+  const [{ admins, inquiries, notes, activities }] = await query(
+    `SELECT (SELECT count(*) FROM public.admins)::int AS admins,
+            (SELECT count(*) FROM public.inquiries)::int AS inquiries,
+            (SELECT count(*) FROM public.inquiry_notes)::int AS notes,
+            (SELECT count(*) FROM public.inquiry_activities)::int AS activities`,
   );
-  logger.info('Schema matches the models and RLS is enabled', { admins, inquiries });
+  logger.info('Schema matches the models and RLS is enabled', {
+    tables: tables.length,
+    admins,
+    inquiries,
+    notes,
+    activities,
+  });
 });

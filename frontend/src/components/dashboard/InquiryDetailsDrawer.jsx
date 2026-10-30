@@ -11,7 +11,12 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { addInquiryNote, getAssignableAdmins, getInquiry, updateInquiry } from '../../api/inquiries.api.js';
+import {
+  addInquiryNote,
+  getAssignableAdmins,
+  getInquiry,
+  updateInquiry,
+} from '../../api/inquiries.api.js';
 import { INQUIRY_STATUSES } from '../../constants/inquiry.js';
 import { describeApiError } from '../../lib/apiErrors.js';
 import { formatDateTime, telHref } from '../../lib/format.js';
@@ -66,7 +71,12 @@ export function InquiryDetailsDrawer({ inquiryId, onClose, onChanged, onNotice }
   const [state, setState] = useState({ id: inquiryId, status: 'loading', data: null, error: null });
   const [admins, setAdmins] = useState([]);
   const [note, setNote] = useState('');
-  const [form, setForm] = useState({ status: '', assignedAdminId: '', followUpDate: '', followUpOutcome: '' });
+  const [form, setForm] = useState({
+    status: '',
+    assignedAdminId: '',
+    followUpDate: '',
+    followUpOutcome: '',
+  });
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState(null);
   const dialogRef = useRef(null);
@@ -109,12 +119,42 @@ export function InquiryDetailsDrawer({ inquiryId, onClose, onChanged, onNotice }
   }, []);
 
   useEffect(() => {
+    // Escape closes. Tab is contained inside the drawer: with aria-modal set,
+    // assistive tech treats the rest of the page as inert, so focus must not
+    // escape to it either. Disabled and hidden controls are skipped.
+    const FOCUSABLE =
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
+      'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
     function onKeyDown(event) {
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+
+      const focusable = [...dialogRef.current.querySelectorAll(FOCUSABLE)].filter(
+        (element) => !element.hidden && element.getAttribute('aria-hidden') !== 'true',
+      );
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && (active === first || !dialogRef.current.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !dialogRef.current.contains(active))) {
+        event.preventDefault();
+        first.focus();
       }
     }
+
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
@@ -176,7 +216,10 @@ export function InquiryDetailsDrawer({ inquiryId, onClose, onChanged, onNotice }
   const outcomeId = `outcome-${inquiryId}`;
 
   return (
-    <div className="drawer-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div
+      className="drawer-backdrop"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
       <aside
         className="drawer"
         role="dialog"
@@ -191,13 +234,22 @@ export function InquiryDetailsDrawer({ inquiryId, onClose, onChanged, onNotice }
               {data?.name ?? 'Loading inquiry…'}
             </h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close inquiry details">
+          <button
+            type="button"
+            className="icon-button"
+            onClick={onClose}
+            aria-label="Close inquiry details"
+          >
             <X aria-hidden="true" />
           </button>
         </header>
 
         <div className="drawer__scroll">
-          {current.status === 'loading' && <p className="muted" role="status">Loading inquiry…</p>}
+          {current.status === 'loading' && (
+            <p className="muted" role="status">
+              Loading inquiry…
+            </p>
+          )}
           {current.status === 'error' && (
             <Alert variant="error" title="Inquiry could not be loaded">
               {describeApiError(current.error, 'detail')}
@@ -213,7 +265,13 @@ export function InquiryDetailsDrawer({ inquiryId, onClose, onChanged, onNotice }
                   <DetailItem label="Name">{data.name}</DetailItem>
                   <DetailItem label="User type">{data.userType}</DetailItem>
                   <DetailItem label="Phone">
-                    {data.phone ? phoneHref ? <a href={phoneHref}>{data.phone}</a> : data.phone : null}
+                    {data.phone ? (
+                      phoneHref ? (
+                        <a href={phoneHref}>{data.phone}</a>
+                      ) : (
+                        data.phone
+                      )
+                    ) : null}
                   </DetailItem>
                   <DetailItem label="Email">
                     {data.email ? <a href={`mailto:${data.email}`}>{data.email}</a> : null}
@@ -232,7 +290,9 @@ export function InquiryDetailsDrawer({ inquiryId, onClose, onChanged, onNotice }
                   <StickyNote aria-hidden="true" /> Admin notes
                 </h3>
                 <form className="drawer__form" onSubmit={handleNoteSubmit}>
-                  <label htmlFor="new-note" className="field__label">Add an internal note</label>
+                  <label htmlFor="new-note" className="field__label">
+                    Add an internal note
+                  </label>
                   <textarea
                     id="new-note"
                     className="input textarea"
@@ -243,7 +303,12 @@ export function InquiryDetailsDrawer({ inquiryId, onClose, onChanged, onNotice }
                     placeholder="Called the parent; discussed scholarship eligibility."
                   />
                   <div className="drawer__actions">
-                    <Button type="submit" icon={StickyNote} loading={saving} disabled={saving || !note.trim()}>
+                    <Button
+                      type="submit"
+                      icon={StickyNote}
+                      loading={saving}
+                      disabled={saving || !note.trim()}
+                    >
                       Add note
                     </Button>
                   </div>
@@ -271,30 +336,46 @@ export function InquiryDetailsDrawer({ inquiryId, onClose, onChanged, onNotice }
                 <form className="drawer__form" onSubmit={handleWorkflowSubmit}>
                   <div className="drawer__field-grid">
                     <div className="field">
-                      <label htmlFor="detail-status" className="field__label">Status</label>
+                      <label htmlFor="detail-status" className="field__label">
+                        Status
+                      </label>
                       <select
                         id="detail-status"
                         className="input select"
                         value={form.status}
                         onChange={(event) => setForm({ ...form, status: event.target.value })}
                       >
-                        {INQUIRY_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                        {INQUIRY_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div className="field">
-                      <label htmlFor="detail-assignee" className="field__label">Assign to</label>
+                      <label htmlFor="detail-assignee" className="field__label">
+                        Assign to
+                      </label>
                       <select
                         id="detail-assignee"
                         className="input select"
                         value={form.assignedAdminId}
-                        onChange={(event) => setForm({ ...form, assignedAdminId: event.target.value })}
+                        onChange={(event) =>
+                          setForm({ ...form, assignedAdminId: event.target.value })
+                        }
                       >
                         <option value="">Unassigned</option>
-                        {admins.map((admin) => <option key={admin.id} value={admin.id}>{admin.email}</option>)}
+                        {admins.map((admin) => (
+                          <option key={admin.id} value={admin.id}>
+                            {admin.email}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div className="field">
-                      <label htmlFor={followUpId} className="field__label">Follow-up date</label>
+                      <label htmlFor={followUpId} className="field__label">
+                        Follow-up date
+                      </label>
                       <input
                         id={followUpId}
                         type="date"
@@ -305,12 +386,16 @@ export function InquiryDetailsDrawer({ inquiryId, onClose, onChanged, onNotice }
                     </div>
                   </div>
                   <div className="field">
-                    <label htmlFor={outcomeId} className="field__label">Follow-up outcome</label>
+                    <label htmlFor={outcomeId} className="field__label">
+                      Follow-up outcome
+                    </label>
                     <textarea
                       id={outcomeId}
                       className="input textarea"
                       value={form.followUpOutcome}
-                      onChange={(event) => setForm({ ...form, followUpOutcome: event.target.value })}
+                      onChange={(event) =>
+                        setForm({ ...form, followUpOutcome: event.target.value })
+                      }
                       maxLength={2000}
                       rows={3}
                       placeholder="Record what happened and any next steps."
@@ -332,7 +417,11 @@ export function InquiryDetailsDrawer({ inquiryId, onClose, onChanged, onNotice }
               </section>
             </>
           )}
-          {actionError && <Alert variant="error" title="Change not saved">{actionError}</Alert>}
+          {actionError && (
+            <Alert variant="error" title="Change not saved">
+              {actionError}
+            </Alert>
+          )}
         </div>
       </aside>
     </div>

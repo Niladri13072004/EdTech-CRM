@@ -107,6 +107,31 @@ describe('inquiry details drawer', () => {
     expect(within(dialog).getByText('Admission')).toBeInTheDocument();
   });
 
+  it('keeps Tab focus inside the drawer', async () => {
+    const { user } = renderApp('/admin/dashboard');
+    await openDetails(user);
+    const dialog = await screen.findByRole('dialog');
+
+    // Document order, the same order Tab visits them in.
+    const focusable = [
+      ...dialog.querySelectorAll('button, input, select, textarea, a[href]'),
+    ].filter((element) => !element.disabled);
+    expect(focusable.length).toBeGreaterThan(1);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    // Tabbing from the last control wraps to the first, not out of the dialog.
+    last.focus();
+    await user.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(first);
+
+    // Shift+Tab from the first wraps to the last.
+    first.focus();
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(last);
+  });
+
   it('closes on Escape and returns to the dashboard', async () => {
     const { user } = renderApp('/admin/dashboard');
     await openDetails(user);
@@ -133,9 +158,7 @@ describe('inquiry details drawer', () => {
     await user.type(screen.getByLabelText('Add an internal note'), 'Called the parent.');
     await user.click(screen.getByRole('button', { name: 'Add note' }));
 
-    await waitFor(() =>
-      expect(addInquiryNote).toHaveBeenCalledWith(ID, 'Called the parent.'),
-    );
+    await waitFor(() => expect(addInquiryNote).toHaveBeenCalledWith(ID, 'Called the parent.'));
     expect(await screen.findByText('Called the parent.')).toBeInTheDocument();
     expect(screen.getAllByText(new RegExp(ADMIN.email)).length).toBeGreaterThan(0);
   });

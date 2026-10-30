@@ -9,7 +9,12 @@ import bcrypt from 'bcrypt';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BACKEND_ROOT } from '../../src/config/env.js';
 import { CATEGORIES, INQUIRY_STATUSES, USER_TYPES } from '../../src/constants/inquiry.js';
-import { COLUMNS_QUERY, compareModelsToColumns } from '../../src/models/schemaComparison.js';
+import {
+  buildColumnsQuery,
+  buildRlsQuery,
+  compareModelsToColumns,
+  modelTableNames,
+} from '../../src/models/schemaComparison.js';
 import { buildOfflineModels } from '../helpers/testApp.js';
 
 const schemaSql = fs.readFileSync(path.join(BACKEND_ROOT, '..', 'schema.sql'), 'utf8');
@@ -67,11 +72,23 @@ describe('schema.sql', () => {
     await expect(db.exec(schemaSql)).resolves.toBeDefined();
   });
 
-  it('matches the Sequelize models column for column', async () => {
-    const { rows } = await db.query(COLUMNS_QUERY);
-    expect(
-      compareModelsToColumns({ Admin: offline.Admin, Inquiry: offline.Inquiry }, rows),
-    ).toEqual([]);
+  it('covers every registered model table', () => {
+    expect(modelTableNames(offline)).toEqual([
+      'admins',
+      'inquiries',
+      'inquiry_activities',
+      'inquiry_notes',
+    ]);
+  });
+
+  it('matches every Sequelize model column for column', async () => {
+    const { sql, bind } = buildColumnsQuery(modelTableNames(offline));
+    const { rows } = await db.query(sql, bind);
+    expect(compareModelsToColumns(offline, rows)).toEqual([]);
+    // The comparison is only meaningful if all four tables were actually read.
+    expect(new Set(rows.map((row) => row.table_name))).toEqual(
+      new Set(['admins', 'inquiries', 'inquiry_notes', 'inquiry_activities']),
+    );
   });
 
   it('allows exactly the values defined in constants/inquiry.js', async () => {
@@ -93,13 +110,14 @@ describe('schema.sql', () => {
     );
   });
 
-  it('enables Row Level Security on both tables', async () => {
-    const { rows } = await db.query(
-      "SELECT relname, relrowsecurity FROM pg_class WHERE relname IN ('admins', 'inquiries') ORDER BY relname",
-    );
+  it('enables Row Level Security on every model table', async () => {
+    const { sql, bind } = buildRlsQuery(modelTableNames(offline));
+    const { rows } = await db.query(sql, bind);
     expect(rows).toEqual([
       { relname: 'admins', relrowsecurity: true },
       { relname: 'inquiries', relrowsecurity: true },
+      { relname: 'inquiry_activities', relrowsecurity: true },
+      { relname: 'inquiry_notes', relrowsecurity: true },
     ]);
   });
 });
