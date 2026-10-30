@@ -8,9 +8,7 @@ A CRM for an education provider. Parents, students and schools submit inquiries 
 - **Authentication:** custom bcrypt password hashes plus a JWT carried in an HttpOnly cookie
 - **Deployment:** a single Render web service (`render.yaml`) that serves the API and the built React app from one origin
 
-> **Status:** all mandatory features are implemented and tested. Nothing has been deployed yet, and nothing has been tested against a real Supabase project (that needs your credentials; see [Supabase setup](#3-supabase-setup)).
-
-More detail: [Architecture](docs/ARCHITECTURE.md) · [Implementation plan](docs/IMPLEMENTATION_PLAN.md) · [Requirements traceability](docs/REQUIREMENTS_TRACEABILITY.md)
+More detail: [Architecture](docs/ARCHITECTURE.md)
 
 ---
 
@@ -34,7 +32,7 @@ More detail: [Architecture](docs/ARCHITECTURE.md) · [Implementation plan](docs/
 
 ## 1. Features
 
-### Mandatory
+### Core
 
 | Feature | Where |
 |---------|-------|
@@ -46,7 +44,7 @@ More detail: [Architecture](docs/ARCHITECTURE.md) · [Implementation plan](docs/
 | Table with Name, Phone, Email, User Type, Category, Date, Status | dashboard |
 | Filter by Category, filter by User Type, search by name or phone, all combinable | dashboard · `GET /api/inquiries` |
 
-### Additional
+### Dashboard
 
 - **Status management** (New / In Progress / Resolved) from the table, with confirmation messages.
 - **Pagination** on the server (20 per page by default), plus sorting by date or name.
@@ -96,7 +94,7 @@ In production, one service serves both the pages and the API, so they share an o
 ├── schema.sql                  database schema (tables, constraints, indexes, trigger, RLS)
 ├── render.yaml                 Render Blueprint (single same-origin web service)
 ├── .env.example                backend configuration template
-└── docs/                       architecture, implementation plan, requirements traceability
+└── docs/                       technical documentation
 ```
 
 ### Data model (`schema.sql`)
@@ -139,7 +137,7 @@ In production, one service serves both the pages and the API, so they share an o
 **Prerequisites:** Node.js **22.22+ or 24** (`.nvmrc` says 24) and npm. For the full setup you also need a Supabase project; to try the app without one, see [Option B](#option-b-no-supabase-in-memory-database).
 
 ```bash
-git clone https://github.com/twishamp2024/EdTech-CRM-and-Inquiry-System.git
+git clone <your-repository-url>
 cd EdTech-CRM-and-Inquiry-System
 npm ci --prefix backend
 npm ci --prefix frontend
@@ -371,8 +369,6 @@ Run `unset PW TOKEN` and delete `cookies.txt` and `inquiries.csv` afterwards.
 | `npm run build --prefix frontend` | production build into `frontend/dist` |
 | `npm run preview --prefix frontend` | serves the build locally with the production security headers |
 
-Latest results are recorded in [docs/REQUIREMENTS_TRACEABILITY.md](docs/REQUIREMENTS_TRACEABILITY.md).
-
 ---
 
 ## 10. Deployment
@@ -465,6 +461,3 @@ Calling the API cross-site without a rewrite is **not recommended**. It would ne
 
 ---
 
-## License
-
-[MIT](LICENSE)
