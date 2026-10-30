@@ -31,6 +31,9 @@ describe('Inquiry model', () => {
       category: 'category',
       message: 'message',
       status: 'status',
+      assignedAdminId: 'assigned_admin_id',
+      followUpDate: 'follow_up_date',
+      followUpOutcome: 'follow_up_outcome',
       createdAt: 'created_at',
       updatedAt: 'updated_at',
     });

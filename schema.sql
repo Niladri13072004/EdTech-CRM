@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS public.inquiries (
   category   text        NOT NULL,
   message    text        NOT NULL,
   status     text        NOT NULL DEFAULT 'New',
+  assigned_admin_id uuid   REFERENCES public.admins (id) ON DELETE SET NULL,
+  follow_up_date    date,
+  follow_up_outcome text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
 
@@ -71,8 +74,16 @@ CREATE TABLE IF NOT EXISTS public.inquiries (
   CONSTRAINT inquiries_message_length
     CHECK (char_length(btrim(message)) BETWEEN 1 AND 2000),
   CONSTRAINT inquiries_status_allowed
-    CHECK (status IN ('New', 'In Progress', 'Resolved'))
+    CHECK (status IN ('New', 'In Progress', 'Resolved')),
+  CONSTRAINT inquiries_follow_up_outcome_length
+    CHECK (follow_up_outcome IS NULL OR char_length(btrim(follow_up_outcome)) BETWEEN 1 AND 2000)
 );
+
+-- Add the follow-up columns to databases created before this change.
+ALTER TABLE public.inquiries
+  ADD COLUMN IF NOT EXISTS assigned_admin_id uuid REFERENCES public.admins (id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS follow_up_date date,
+  ADD COLUMN IF NOT EXISTS follow_up_outcome text;
 
 COMMENT ON TABLE public.inquiries IS 'Inquiries submitted through the public form.';
 
@@ -106,6 +117,42 @@ CREATE TRIGGER inquiries_set_updated_at
   EXECUTE FUNCTION public.set_updated_at();
 
 -- -----------------------------------------------------------------------------
+-- inquiry_notes: internal remarks written by administrators.
+-- inquiry_activities: append-only audit trail displayed in the detail drawer.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.inquiry_notes (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  inquiry_id   uuid        NOT NULL REFERENCES public.inquiries (id) ON DELETE CASCADE,
+  admin_id     uuid        REFERENCES public.admins (id) ON DELETE SET NULL,
+  admin_email  text        NOT NULL,
+  body         text        NOT NULL,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT inquiry_notes_body_length
+    CHECK (char_length(btrim(body)) BETWEEN 1 AND 5000)
+);
+
+CREATE INDEX IF NOT EXISTS inquiry_notes_inquiry_created_at_idx
+  ON public.inquiry_notes (inquiry_id, created_at ASC);
+
+CREATE TABLE IF NOT EXISTS public.inquiry_activities (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  inquiry_id  uuid        NOT NULL REFERENCES public.inquiries (id) ON DELETE CASCADE,
+  admin_id    uuid        REFERENCES public.admins (id) ON DELETE SET NULL,
+  admin_email text,
+  type        text        NOT NULL,
+  summary     text        NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT inquiry_activities_type_allowed
+    CHECK (type IN ('received', 'status', 'note', 'assignment', 'follow_up', 'outcome', 'update')),
+  CONSTRAINT inquiry_activities_summary_length
+    CHECK (char_length(btrim(summary)) BETWEEN 1 AND 500)
+);
+
+CREATE INDEX IF NOT EXISTS inquiry_activities_inquiry_created_at_idx
+  ON public.inquiry_activities (inquiry_id, created_at ASC);
+-- -----------------------------------------------------------------------------
 -- Row Level Security: Supabase exposes public tables through its REST API to
 -- anyone holding the project's anon key. Enabling RLS with no policies denies
 -- that access entirely. The backend connects as the table owner (postgres),
@@ -113,5 +160,7 @@ CREATE TRIGGER inquiries_set_updated_at
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.admins    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inquiries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inquiry_notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inquiry_activities ENABLE ROW LEVEL SECURITY;
 
 COMMIT;

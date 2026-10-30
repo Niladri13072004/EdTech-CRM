@@ -46,3 +46,6 @@ coverage/
 graphify-out/
 
 
+
+# Local browser tooling artifacts
+.playwright-cli/

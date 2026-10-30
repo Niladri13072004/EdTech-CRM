@@ -95,6 +95,9 @@ beforeAll(async () => {
       inquiryService: createInquiryService({
         sequelize: db.sequelize,
         Inquiry: db.models.Inquiry,
+        InquiryNote: db.models.InquiryNote,
+        InquiryActivity: db.models.InquiryActivity,
+        Admin: db.models.Admin,
         duplicateWindowMs: 0,
       }),
       authService: createAuthService({
@@ -475,6 +478,9 @@ describe('GET /api/inquiries/export', () => {
     const small = createInquiryService({
       sequelize: db.sequelize,
       Inquiry: db.models.Inquiry,
+      InquiryNote: db.models.InquiryNote,
+      InquiryActivity: db.models.InquiryActivity,
+      Admin: db.models.Admin,
       duplicateWindowMs: 0,
       exportMaxRows: 5,
     });
@@ -486,6 +492,72 @@ describe('GET /api/inquiries/export', () => {
   });
 });
 
+describe('inquiry details, notes and follow-up', () => {
+  const target = () => SEED[24];
+
+  it('returns the complete detail with a synthetic received milestone', async () => {
+    const res = await agent.get(`/api/inquiries/${target().id}`).set('Origin', TEST_ORIGIN);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ id: target().id, message: target().message });
+    expect(res.body.data.notes).toEqual([]);
+    expect(res.body.data.activities[0]).toMatchObject({ type: 'received', summary: 'Inquiry received.' });
+  });
+
+  it('adds a note with the signed-in admin and records it in the timeline', async () => {
+    const res = await agent
+      .post(`/api/inquiries/${target().id}/notes`)
+      .set('Origin', TEST_ORIGIN)
+      .send({ body: 'Called the parent; discussed scholarship eligibility.' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.body).toBe('Called the parent; discussed scholarship eligibility.');
+    expect(res.body.data.admin.email).toBe('ops@school.org');
+
+    const detail = await agent.get(`/api/inquiries/${target().id}`).set('Origin', TEST_ORIGIN);
+    expect(detail.body.data.notes).toHaveLength(1);
+    expect(detail.body.data.activities.some((item) => item.type === 'note')).toBe(true);
+  });
+
+  it('rejects an empty note and does not create an activity', async () => {
+    const other = SEED[23];
+    const res = await agent
+      .post(`/api/inquiries/${other.id}/notes`)
+      .set('Origin', TEST_ORIGIN)
+      .send({ body: '   ' });
+    expect(res.status).toBe(400);
+    const detail = await agent.get(`/api/inquiries/${other.id}`).set('Origin', TEST_ORIGIN);
+    expect(detail.body.data.notes).toHaveLength(0);
+  });
+
+  it('updates status, assignment, follow-up date and outcome with timeline entries', async () => {
+    const admins = await agent.get('/api/inquiries/assignable-admins').set('Origin', TEST_ORIGIN);
+    expect(admins.status).toBe(200);
+    expect(admins.body.data.some((item) => item.email === 'ops@school.org')).toBe(true);
+
+    const res = await agent
+      .patch(`/api/inquiries/${target().id}`)
+      .set('Origin', TEST_ORIGIN)
+      .send({
+        status: 'In Progress',
+        followUpDate: '2026-11-02',
+        followUpOutcome: 'Parent requested a callback.',
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ status: 'In Progress', followUpDate: '2026-11-02' });
+    expect(res.body.data.followUpOutcome).toBe('Parent requested a callback.');
+
+    const types = res.body.data.activities.map((item) => item.type);
+    expect(types).toEqual(expect.arrayContaining(['received', 'status', 'follow_up', 'outcome']));
+  });
+
+  it('rejects an unknown assignee and changes nothing', async () => {
+    const res = await agent
+      .patch(`/api/inquiries/${target().id}`)
+      .set('Origin', TEST_ORIGIN)
+      .send({ assignedAdminId: '00000000-0000-4000-8000-000000000000' });
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('INVALID_ASSIGNEE');
+  });
+});
 describe('PATCH /api/inquiries/:id/status', () => {
   const target = () => SEED[25];
   const statusOf = async (id) =>

@@ -48,6 +48,9 @@ async function main() {
     inquiryService: createInquiryService({
       sequelize: db.sequelize,
       Inquiry: db.models.Inquiry,
+      InquiryNote: db.models.InquiryNote,
+      InquiryActivity: db.models.InquiryActivity,
+      Admin: db.models.Admin,
       duplicateWindowMs: config.inquiries.duplicateWindowMs,
     }),
     authService: createAuthService({

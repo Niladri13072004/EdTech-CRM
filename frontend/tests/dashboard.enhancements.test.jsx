@@ -4,6 +4,7 @@ import { fetchCurrentAdmin } from '../src/api/auth.api.js';
 import { ApiError } from '../src/api/client.js';
 import {
   exportInquiriesCsv,
+  getAssignableAdmins,
   getInquiryStats,
   listInquiries,
   updateInquiryStatus,
@@ -22,6 +23,10 @@ vi.mock('../src/api/inquiries.api.js', () => ({
   updateInquiryStatus: vi.fn(),
   getInquiryStats: vi.fn(),
   exportInquiriesCsv: vi.fn(),
+  getInquiry: vi.fn(),
+  addInquiryNote: vi.fn(),
+  updateInquiry: vi.fn(),
+  getAssignableAdmins: vi.fn(),
 }));
 
 const STATS = {
@@ -61,6 +66,7 @@ beforeEach(() => {
   vi.mocked(fetchCurrentAdmin).mockResolvedValue(ADMIN);
   vi.mocked(listInquiries).mockResolvedValue(page());
   vi.mocked(getInquiryStats).mockResolvedValue(STATS);
+  vi.mocked(getAssignableAdmins).mockResolvedValue([]);
 });
 
 const cards = () => within(screen.getByRole('list', { name: 'Inquiry totals' }));
@@ -81,7 +87,7 @@ describe('summary cards', () => {
   });
 
   it('show placeholders while loading', async () => {
-    vi.mocked(getInquiryStats).mockReturnValue(deferred().promise);
+    vi.mocked(getInquiryStats).mockReturnValueOnce(deferred().promise);
     renderApp('/admin/dashboard');
     await screen.findByRole('table');
     expect(card('Total inquiries')).toHaveTextContent('—');

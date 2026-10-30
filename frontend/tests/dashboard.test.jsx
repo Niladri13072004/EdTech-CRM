@@ -17,6 +17,10 @@ vi.mock('../src/api/inquiries.api.js', () => ({
   updateInquiryStatus: vi.fn(),
   getInquiryStats: vi.fn(),
   exportInquiriesCsv: vi.fn(),
+  getInquiry: vi.fn(),
+  addInquiryNote: vi.fn(),
+  updateInquiry: vi.fn(),
+  getAssignableAdmins: vi.fn(),
 }));
 
 const row = (overrides = {}) => ({

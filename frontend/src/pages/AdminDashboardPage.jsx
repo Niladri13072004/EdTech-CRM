@@ -11,6 +11,7 @@ import { ActiveFilters } from '../components/dashboard/ActiveFilters.jsx';
 import { CategoryBreakdown } from '../components/dashboard/CategoryBreakdown.jsx';
 import { DashboardToolbar } from '../components/dashboard/DashboardToolbar.jsx';
 import { ExportButton } from '../components/dashboard/ExportButton.jsx';
+import { InquiryDetailsDrawer } from '../components/dashboard/InquiryDetailsDrawer.jsx';
 import { InquiryTable } from '../components/dashboard/InquiryTable.jsx';
 import { Pagination } from '../components/dashboard/Pagination.jsx';
 import { SummaryCards } from '../components/dashboard/SummaryCards.jsx';
@@ -161,7 +162,18 @@ export function AdminDashboardPage() {
 
   const [pendingStatus, setPendingStatus] = useState({});
   const [notice, setNotice] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const tableTopRef = useRef(null);
+
+  function handleDetailChanged(updated) {
+    setResult((previous) => ({
+      ...previous,
+      inquiries: previous.inquiries.map((row) =>
+        row.id === updated.id ? { ...row, ...updated } : row,
+      ),
+    }));
+    refreshStats();
+  }
 
   async function handleStatusChange(inquiry, status) {
     if (status === inquiry.status) return;
@@ -271,6 +283,8 @@ export function AdminDashboardPage() {
           onSort={(sortBy, sortDir) => update({ sortBy, sortDir })}
           pendingStatus={pendingStatus}
           onStatusChange={handleStatusChange}
+          onSelect={(inquiry) => setSelectedId(inquiry.id)}
+          activeId={selectedId}
           busy={loading}
         />
         <Pagination
@@ -323,6 +337,15 @@ export function AdminDashboardPage() {
           </>
         )}
       </section>
+
+      {selectedId && (
+        <InquiryDetailsDrawer
+          inquiryId={selectedId}
+          onClose={() => setSelectedId(null)}
+          onChanged={handleDetailChanged}
+          onNotice={setNotice}
+        />
+      )}
 
       <section className="card dashboard-card" aria-labelledby="inquiries-heading">
         <h2 id="inquiries-heading" className="visually-hidden">

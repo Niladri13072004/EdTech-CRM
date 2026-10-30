@@ -63,6 +63,8 @@ export function InquiryTable({
   onSort,
   pendingStatus,
   onStatusChange,
+  onSelect,
+  activeId,
   busy,
 }) {
   return (
@@ -92,7 +94,19 @@ export function InquiryTable({
             const dateParts = formatDateParts(inquiry.createdAt);
             const phoneLink = inquiry.phone ? telHref(inquiry.phone) : null;
             return (
-              <tr key={inquiry.id}>
+              <tr
+                key={inquiry.id}
+                className={`data-table__row${activeId === inquiry.id ? ' data-table__row--active' : ''}`}
+                onClick={() => onSelect?.(inquiry)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onSelect?.(inquiry);
+                  }
+                }}
+                tabIndex={0}
+                aria-label={`Open details for ${inquiry.name || 'this inquiry'}`}
+              >
                 <th scope="row" className="data-table__name">
                   {inquiry.name || <Missing />}
                 </th>
@@ -130,7 +144,10 @@ export function InquiryTable({
                     <Missing />
                   )}
                 </td>
-                <td>
+                <td
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
                   <StatusSelect
                     inquiry={inquiry}
                     value={pendingStatus[inquiry.id] ?? inquiry.status ?? 'New'}

@@ -79,3 +79,43 @@ export async function exportInquiriesCsv(params) {
     rowCount: Number.isInteger(rowCount) ? rowCount : null,
   };
 }
+
+/** GET /api/inquiries/:id (admin): inquiry, notes, assignment, follow-up and activity. */
+export async function getInquiry(id, { signal } = {}) {
+  const { data } = await apiClient.get(`/inquiries/${encodeURIComponent(id)}`, { signal });
+  if (data?.success !== true || data?.data?.id !== id) {
+    throw new ApiError('Unexpected response from the server.', { code: 'BAD_RESPONSE' });
+  }
+  return data.data;
+}
+
+/** POST /api/inquiries/:id/notes (admin). Returns the created note. */
+export async function addInquiryNote(id, body) {
+  const { data } = await apiClient.post(`/inquiries/${encodeURIComponent(id)}/notes`, { body });
+  if (data?.success !== true || !data?.data?.id) {
+    throw new ApiError('The server did not confirm that the note was saved.', {
+      code: 'UNCONFIRMED',
+    });
+  }
+  return data.data;
+}
+
+/** PATCH /api/inquiries/:id (admin): status, assignment, follow-up date and outcome. */
+export async function updateInquiry(id, changes) {
+  const { data } = await apiClient.patch(`/inquiries/${encodeURIComponent(id)}`, changes);
+  if (data?.success !== true || data?.data?.id !== id) {
+    throw new ApiError('The server did not confirm that the inquiry was updated.', {
+      code: 'UNCONFIRMED',
+    });
+  }
+  return data.data;
+}
+
+/** GET /api/inquiries/assignable-admins (admin). */
+export async function getAssignableAdmins({ signal } = {}) {
+  const { data } = await apiClient.get('/inquiries/assignable-admins', { signal });
+  if (data?.success !== true || !Array.isArray(data.data)) {
+    throw new ApiError('Unexpected response from the server.', { code: 'BAD_RESPONSE' });
+  }
+  return data.data;
+}

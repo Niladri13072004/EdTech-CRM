@@ -59,7 +59,10 @@ export const unstubbedInquiryService = Object.freeze(
       'getInquiryStats',
       'exportInquiries',
       'getInquiry',
+      'addNote',
+      'updateInquiryWorkflow',
       'updateInquiryStatus',
+      'getAssignableAdmins',
     ].map((name) => [
       name,
       async () => {

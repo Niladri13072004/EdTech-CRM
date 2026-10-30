@@ -135,7 +135,11 @@ describe('authorized access to inquiry records', () => {
     const res = await call(app, 'PATCH', `/api/inquiries/${ID}/status`, token);
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('Resolved');
-    expect(inquiryService.updateInquiryStatus).toHaveBeenCalledWith(ID, 'Resolved');
+    expect(inquiryService.updateInquiryStatus).toHaveBeenCalledWith(
+      ID,
+      'Resolved',
+      expect.objectContaining({ id: TEST_ADMIN.id, email: TEST_ADMIN.email }),
+    );
   });
 
   it.each([

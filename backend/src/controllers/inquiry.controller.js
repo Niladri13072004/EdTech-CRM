@@ -48,11 +48,38 @@ export function createInquiryController({ inquiryService }) {
       res.set('Cache-Control', 'no-store').json({ success: true, data: inquiry });
     },
 
+    /** GET /api/inquiries/assignable-admins (admin) */
+    async assignableAdmins(_req, res) {
+      const admins = await inquiryService.getAssignableAdmins();
+      res.set('Cache-Control', 'no-store').json({ success: true, data: admins });
+    },
+
+    /** POST /api/inquiries/:id/notes (admin) */
+    async addNote(req, res) {
+      const note = await inquiryService.addNote(
+        req.validated.params.id,
+        req.validated.body.body,
+        req.auth.admin,
+      );
+      res.status(201).json({ success: true, message: 'Note added.', data: note });
+    },
+
+    /** PATCH /api/inquiries/:id (admin) — status, assignment and follow-up. */
+    async updateWorkflow(req, res) {
+      const inquiry = await inquiryService.updateInquiryWorkflow(
+        req.validated.params.id,
+        req.validated.body,
+        req.auth.admin,
+      );
+      res.json({ success: true, message: 'Inquiry updated.', data: inquiry });
+    },
+
     /** PATCH /api/inquiries/:id/status (admin) */
     async updateStatus(req, res) {
       const inquiry = await inquiryService.updateInquiryStatus(
         req.validated.params.id,
         req.validated.body.status,
+        req.auth.admin,
       );
       res.json({ success: true, message: 'Status updated.', data: inquiry });
     },

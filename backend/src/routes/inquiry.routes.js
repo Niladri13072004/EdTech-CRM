@@ -11,7 +11,9 @@ import {
   emptyQuerySchema,
   exportInquiriesQuerySchema,
   listInquiriesQuerySchema,
+  addInquiryNoteSchema,
   updateInquiryStatusSchema,
+  updateInquiryWorkflowSchema,
 } from '../validators/inquiry.schema.js';
 
 export function createInquiryRouter({ inquiryService, config, security }) {
@@ -35,7 +37,22 @@ export function createInquiryRouter({ inquiryService, config, security }) {
   // Fixed paths before /:id, which only accepts UUIDs.
   router.get('/stats', validate({ query: emptyQuerySchema }), controller.stats);
   router.get('/export', validate({ query: exportInquiriesQuerySchema }), controller.exportCsv);
+  router.get('/assignable-admins', validate({ query: emptyQuerySchema }), controller.assignableAdmins);
   router.get('/:id', validate({ params: uuidParamSchema }), controller.show);
+  router.post(
+    '/:id/notes',
+    security.requireTrustedOrigin,
+    requireJson,
+    validate({ params: uuidParamSchema, body: addInquiryNoteSchema }),
+    controller.addNote,
+  );
+  router.patch(
+    '/:id',
+    security.requireTrustedOrigin,
+    requireJson,
+    validate({ params: uuidParamSchema, body: updateInquiryWorkflowSchema }),
+    controller.updateWorkflow,
+  );
   router.patch(
     '/:id/status',
     security.requireTrustedOrigin,

@@ -188,3 +188,65 @@ export const updateInquiryStatusSchema = z.strictObject(
       issue.code === 'invalid_type' ? 'Request body must be a JSON object' : undefined,
   },
 );
+
+/** Optional administrator note body. */
+export const addInquiryNoteSchema = z.strictObject(
+  {
+    body: z
+      .string({ error: 'Note must be text' })
+      .trim()
+      .min(1, { error: 'Note is required', abort: true })
+      .max(5000, { error: 'Note must be at most 5000 characters' })
+      .refine((value) => !CONTROL_CHARACTERS.test(value), {
+        error: 'Note contains characters that are not allowed',
+      }),
+  },
+  {
+    error: (issue) =>
+      issue.code === 'invalid_type' ? 'Request body must be a JSON object' : undefined,
+  },
+);
+
+const nullableUuid = z.preprocess(
+  (value) => (value === '' ? null : value),
+  z.uuid({ error: 'Assigned administrator must be a valid id' }).nullable().optional(),
+);
+
+const nullableDate = z.preprocess(
+  (value) => (value === '' ? null : value),
+  z
+    .string({ error: 'Follow-up date must be a date' })
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: 'Follow-up date must use YYYY-MM-DD' })
+    .nullable()
+    .optional(),
+);
+
+const nullableOutcome = z.preprocess(
+  (value) => (value === '' ? null : value),
+  z
+    .string({ error: 'Follow-up outcome must be text' })
+    .trim()
+    .max(2000, { error: 'Follow-up outcome must be at most 2000 characters' })
+    .refine((value) => !CONTROL_CHARACTERS.test(value), {
+      error: 'Follow-up outcome contains characters that are not allowed',
+    })
+    .nullable()
+    .optional(),
+);
+
+/** PATCH /api/inquiries/:id — workflow fields. At least one field is required. */
+export const updateInquiryWorkflowSchema = z
+  .strictObject({
+    status: choice('Status', INQUIRY_STATUSES).optional(),
+    assignedAdminId: nullableUuid,
+    followUpDate: nullableDate,
+    followUpOutcome: nullableOutcome,
+  })
+  .refine(
+    (value) =>
+      value.status !== undefined ||
+      value.assignedAdminId !== undefined ||
+      value.followUpDate !== undefined ||
+      value.followUpOutcome !== undefined,
+    { error: 'Provide at least one field to update' },
+  );

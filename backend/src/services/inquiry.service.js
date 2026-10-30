@@ -46,6 +46,9 @@ function pickCreatable(input) {
 export function createInquiryService({
   sequelize,
   Inquiry,
+  InquiryNote,
+  InquiryActivity,
+  Admin,
   duplicateWindowMs,
   exportMaxRows = EXPORT_MAX_ROWS,
 }) {
@@ -187,22 +190,174 @@ export function createInquiryService({
     });
   }
 
-  async function findInquiryOrFail(id) {
-    const inquiry = await Inquiry.findByPk(id);
+  async function findInquiryOrFail(id, options = {}) {
+    const inquiry = await Inquiry.findByPk(id, options);
     if (!inquiry) throw new AppError(404, 'NOT_FOUND', 'Inquiry not found');
     return inquiry;
   }
 
-  async function getInquiry(id) {
-    return (await findInquiryOrFail(id)).get({ plain: true });
+  function actorFrom(actor) {
+    return {
+      adminId: actor?.id ?? null,
+      adminEmail: actor?.email ?? 'System',
+    };
   }
 
-  async function updateInquiryStatus(id, status) {
-    const inquiry = await findInquiryOrFail(id);
-    if (inquiry.status !== status) {
-      await inquiry.update({ status }, { fields: ['status'] });
-    }
-    return inquiry.get({ plain: true });
+  async function recordActivity(inquiryId, type, summary, actor, transaction) {
+    const { adminId, adminEmail } = actorFrom(actor);
+    return InquiryActivity.create(
+      { inquiryId, type, summary, adminId, adminEmail },
+      { transaction },
+    );
+  }
+
+  async function loadDetail(id, { transaction } = {}) {
+    const inquiry = await findInquiryOrFail(id, { transaction });
+    const [notes, activities, assignedAdmin] = await Promise.all([
+      InquiryNote.findAll({ where: { inquiryId: id }, order: [['createdAt', 'ASC']], transaction }),
+      InquiryActivity.findAll({ where: { inquiryId: id }, order: [['createdAt', 'ASC']], transaction }),
+      inquiry.assignedAdminId ? Admin.findByPk(inquiry.assignedAdminId, { transaction }) : null,
+    ]);
+
+    const activityRows = activities.map((row) => row.get({ plain: true }));
+    const received = {
+      id: `received-${inquiry.id}`,
+      inquiryId: inquiry.id,
+      type: 'received',
+      summary: 'Inquiry received.',
+      adminId: null,
+      adminEmail: null,
+      createdAt: inquiry.createdAt,
+    };
+    const timeline = [
+      received,
+      ...activityRows.filter((row) => row.type !== 'received'),
+    ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    return {
+      ...inquiry.get({ plain: true }),
+      assignedAdmin: assignedAdmin
+        ? { id: assignedAdmin.id, email: assignedAdmin.email }
+        : null,
+      notes: notes.map((row) => {
+        const note = row.get({ plain: true });
+        return {
+          id: note.id,
+          body: note.body,
+          admin: { id: note.adminId, email: note.adminEmail },
+          createdAt: note.createdAt,
+        };
+      }),
+      activities: timeline,
+    };
+  }
+
+  async function addNote(id, body, actor) {
+    return sequelize.transaction(async (transaction) => {
+      const inquiry = await findInquiryOrFail(id, { transaction });
+      const { adminId, adminEmail } = actorFrom(actor);
+      const note = await InquiryNote.create(
+        { inquiryId: inquiry.id, adminId, adminEmail, body },
+        { transaction },
+      );
+      await recordActivity(inquiry.id, 'note', 'Note added.', actor, transaction);
+      return {
+        id: note.id,
+        body: note.body,
+        admin: { id: note.adminId, email: note.adminEmail },
+        createdAt: note.createdAt,
+      };
+    });
+  }
+
+  async function updateInquiryWorkflow(id, input, actor) {
+    return sequelize.transaction(async (transaction) => {
+      const inquiry = await findInquiryOrFail(id, { transaction });
+      const changes = {};
+      const activityWrites = [];
+
+      if (input.status !== undefined && input.status !== inquiry.status) {
+        changes.status = input.status;
+        activityWrites.push(
+          recordActivity(
+            inquiry.id,
+            'status',
+            `Status changed from ${inquiry.status} to ${input.status}.`,
+            actor,
+            transaction,
+          ),
+        );
+      }
+
+      if (input.assignedAdminId !== undefined) {
+        const nextId = input.assignedAdminId || null;
+        if (nextId !== (inquiry.assignedAdminId ?? null)) {
+          let nextAdmin = null;
+          if (nextId) {
+            nextAdmin = await Admin.findByPk(nextId, { transaction });
+            if (!nextAdmin) throw new AppError(422, 'INVALID_ASSIGNEE', 'That administrator does not exist');
+          }
+          changes.assignedAdminId = nextId;
+          activityWrites.push(
+            recordActivity(
+              inquiry.id,
+              'assignment',
+              nextAdmin ? `Assigned to ${nextAdmin.email}.` : 'Assignment cleared.',
+              actor,
+              transaction,
+            ),
+          );
+        }
+      }
+
+      if (input.followUpDate !== undefined) {
+        const nextDate = input.followUpDate || null;
+        const currentDate = inquiry.followUpDate ?? null;
+        if (nextDate !== currentDate) {
+          changes.followUpDate = nextDate;
+          activityWrites.push(
+            recordActivity(
+              inquiry.id,
+              'follow_up',
+              nextDate ? `Follow-up scheduled for ${nextDate}.` : 'Follow-up date cleared.',
+              actor,
+              transaction,
+            ),
+          );
+        }
+      }
+
+      if (input.followUpOutcome !== undefined) {
+        const nextOutcome = input.followUpOutcome || null;
+        if (nextOutcome !== (inquiry.followUpOutcome ?? null)) {
+          changes.followUpOutcome = nextOutcome;
+          activityWrites.push(
+            recordActivity(
+              inquiry.id,
+              'outcome',
+              nextOutcome ? 'Follow-up outcome recorded.' : 'Follow-up outcome cleared.',
+              actor,
+              transaction,
+            ),
+          );
+        }
+      }
+
+      if (Object.keys(changes).length > 0) {
+        await inquiry.update(changes, { fields: Object.keys(changes), transaction });
+      }
+      await Promise.all(activityWrites);
+      return loadDetail(inquiry.id, { transaction });
+    });
+  }
+
+  async function updateInquiryStatus(id, status, actor) {
+    return updateInquiryWorkflow(id, { status }, actor);
+  }
+
+  async function getAssignableAdmins() {
+    const admins = await Admin.findAll({ attributes: ['id', 'email'], order: [['email', 'ASC']] });
+    return admins.map((admin) => admin.get({ plain: true }));
   }
 
   return {
@@ -210,7 +365,10 @@ export function createInquiryService({
     listInquiries,
     getInquiryStats,
     exportInquiries,
-    getInquiry,
+    getInquiry: loadDetail,
+    addNote,
+    updateInquiryWorkflow,
     updateInquiryStatus,
+    getAssignableAdmins,
   };
 }

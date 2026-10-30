@@ -202,6 +202,9 @@ describe('session flow against PostgreSQL', () => {
         inquiryService: createInquiryService({
           sequelize: db.sequelize,
           Inquiry: db.models.Inquiry,
+          InquiryNote: db.models.InquiryNote,
+          InquiryActivity: db.models.InquiryActivity,
+          Admin: db.models.Admin,
           duplicateWindowMs: 0,
         }),
         authService: createAuthService({

@@ -79,6 +79,21 @@ export function defineInquiry(sequelize) {
         defaultValue: DEFAULT_INQUIRY_STATUS,
         validate: { isIn: [[...INQUIRY_STATUSES]] },
       },
+      assignedAdminId: {
+        type: DataTypes.UUID,
+        field: 'assigned_admin_id',
+        allowNull: true,
+      },
+      followUpDate: {
+        type: DataTypes.DATEONLY,
+        field: 'follow_up_date',
+        allowNull: true,
+      },
+      followUpOutcome: {
+        type: DataTypes.TEXT,
+        field: 'follow_up_outcome',
+        allowNull: true,
+      },
       createdAt: {
         type: DataTypes.DATE,
         field: 'created_at',
