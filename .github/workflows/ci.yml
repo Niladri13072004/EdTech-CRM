@@ -27,7 +27,6 @@ jobs:
 
     env:
       CI: 'true'
-      NODE_ENV: test
 
     steps:
       - name: Check out the repository
@@ -61,10 +60,18 @@ jobs:
         run: npm run format:check --prefix frontend
 
       - name: Run backend tests
+        env:
+          NODE_ENV: test
         run: npm test --prefix backend
 
       - name: Run frontend tests
+        env:
+          NODE_ENV: test
         run: npm test --prefix frontend
 
       - name: Build the frontend
+        # NODE_ENV, not the command name, decides import.meta.env.PROD/DEV in
+        # Vite. Without this the production build would run as test/dev.
+        env:
+          NODE_ENV: production
         run: npm run build --prefix frontend

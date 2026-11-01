@@ -368,9 +368,11 @@ Run `unset PW TOKEN` and delete `cookies.txt` and `inquiries.csv` afterwards.
 | `npm run format:check --prefix backend`, `--prefix frontend` | Prettier |
 | `npm run build --prefix frontend` | production build into `frontend/dist` |
 | `npm run preview --prefix frontend` | serves the build locally with the production security headers |
-| `npm run db:check --prefix backend` | read-only: verifies every model table (all four) against `schema.sql` and that Row Level Security is on |
+| `npm run db:check --prefix backend` | read-only: verifies every model table (all four) against `schema.sql`: columns, nullability, PostgreSQL types, and Row Level Security |
 
-GitHub Actions runs all of the above except the opt-in integration suite and the preview server on every push and pull request (`.github/workflows/ci.yml`). No Supabase credentials or repository secrets are needed, because everything runs against PGlite or in-process doubles.
+GitHub Actions runs the test suites, lint, formatting and the production build on every push and pull request (`.github/workflows/ci.yml`). No Supabase credentials or repository secrets are needed, because everything runs against PGlite or in-process doubles.
+
+Two items are deliberately **not** run in CI and must be run yourself: `npm run db:check`, which needs a live `DATABASE_URL`, and the opt-in integration suite (`TEST_DATABASE_URL`). The PGlite schema tests in CI execute `schema.sql` and compare it with the models, but they are not a substitute for `db:check` against your real database.
 
 ---
 

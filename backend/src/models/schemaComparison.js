@@ -21,6 +21,41 @@ export function modelTableNames(models) {
 const placeholders = (values) => values.map((_, index) => `$${index + 1}`).join(', ');
 
 /**
+ * Maps Sequelize types onto the data_type spelling used by information_schema.
+ * Unmapped types return null and are skipped, so an exotic column cannot
+ * produce a false failure.
+ */
+const DATA_TYPE_ALIASES = Object.freeze({
+  varchar: 'character varying',
+  char: 'character',
+  bpchar: 'character',
+  timestamptz: 'timestamp with time zone',
+  timestamp: 'timestamp without time zone',
+  bool: 'boolean',
+  int4: 'integer',
+  int8: 'bigint',
+  float8: 'double precision',
+});
+
+/** @param {import('sequelize').AbstractDataType} type */
+export function expectedDataType(type) {
+  if (typeof type?.toSql !== 'function') return null;
+  let sql;
+  try {
+    sql = type.toSql();
+  } catch {
+    return null;
+  }
+  if (typeof sql !== 'string') return null;
+  const base = sql
+    .replace(/\(.*\)/, '')
+    .trim()
+    .toLowerCase();
+  if (!base) return null;
+  return DATA_TYPE_ALIASES[base] ?? base;
+}
+
+/**
  * Lists the columns of the given tables. Works on any PostgreSQL (Supabase,
  * local, PGlite) via information_schema.
  *
@@ -87,6 +122,12 @@ export function compareModelsToColumns(models, columnRows) {
         continue;
       }
       const columnRequired = column.is_nullable === 'NO';
+      const expectedType = expectedDataType(definition.type);
+      if (expectedType && column.data_type && column.data_type !== expectedType) {
+        problems.push(
+          `${table}.${field}: column type is "${column.data_type}" but the model expects "${expectedType}"`,
+        );
+      }
       const modelRequired = definition.allowNull === false || definition.primaryKey === true;
       if (columnRequired !== modelRequired) {
         problems.push(

@@ -13,6 +13,7 @@ import {
   buildColumnsQuery,
   buildRlsQuery,
   compareModelsToColumns,
+  expectedDataType,
   modelTableNames,
 } from '../../src/models/schemaComparison.js';
 import { buildOfflineModels } from '../helpers/testApp.js';
@@ -89,6 +90,40 @@ describe('schema.sql', () => {
     expect(new Set(rows.map((row) => row.table_name))).toEqual(
       new Set(['admins', 'inquiries', 'inquiry_notes', 'inquiry_activities']),
     );
+  });
+
+  it('reports the live PostgreSQL type for every model column', async () => {
+    const { sql, bind } = buildColumnsQuery(modelTableNames(offline));
+    const { rows } = await db.query(sql, bind);
+    const types = Object.fromEntries(
+      rows.map((row) => [`${row.table_name}.${row.column_name}`, row.data_type]),
+    );
+    expect(types['admins.id']).toBe('uuid');
+    expect(types['admins.email']).toBe('text');
+    expect(types['admins.created_at']).toBe('timestamp with time zone');
+    expect(types['inquiries.follow_up_date']).toBe('date');
+    expect(types['inquiries.assigned_admin_id']).toBe('uuid');
+  });
+
+  it('reports a column whose PostgreSQL type drifted away from the model', async () => {
+    const { sql, bind } = buildColumnsQuery(modelTableNames(offline));
+    const { rows } = await db.query(sql, bind);
+    const drifted = rows.map((row) =>
+      row.table_name === 'inquiries' && row.column_name === 'message'
+        ? { ...row, data_type: 'varchar' }
+        : row,
+    );
+    expect(compareModelsToColumns(offline, drifted)).toEqual([
+      'inquiries.message: column type is "varchar" but the model expects "text"',
+    ]);
+  });
+
+  it('translates Sequelize types to information_schema names', () => {
+    const attributes = offline.Inquiry.getAttributes();
+    expect(expectedDataType(attributes.id.type)).toBe('uuid');
+    expect(expectedDataType(attributes.message.type)).toBe('text');
+    expect(expectedDataType(attributes.followUpDate.type)).toBe('date');
+    expect(expectedDataType(attributes.createdAt.type)).toBe('timestamp with time zone');
   });
 
   it('allows exactly the values defined in constants/inquiry.js', async () => {

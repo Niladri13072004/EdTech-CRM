@@ -132,6 +132,44 @@ describe('inquiry details drawer', () => {
     expect(document.activeElement).toBe(last);
   });
 
+  it('moves focus into the dialog when it opens', async () => {
+    const { user } = renderApp('/admin/dashboard');
+    const dialog = await openDetails(user);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(
+      within(dialog).getByRole('heading', { name: /Asha Verma/i }),
+    );
+  });
+
+  it('pulls focus back into the dialog when it is outside', async () => {
+    const { user } = renderApp('/admin/dashboard');
+    const dialog = await openDetails(user);
+
+    // Something outside the modal, e.g. the page behind it.
+    const outside = document.createElement('button');
+    outside.textContent = 'Outside';
+    document.body.append(outside);
+    outside.focus();
+    expect(dialog.contains(document.activeElement)).toBe(false);
+
+    await user.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(dialog.querySelector('button'));
+
+    outside.remove();
+  });
+
+  it('returns focus to the row that opened it after closing', async () => {
+    const { user } = renderApp('/admin/dashboard');
+    const row = await screen.findByRole('row', { name: /Open details for Asha Verma/i });
+    await user.click(row);
+    await screen.findByRole('dialog');
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(row);
+  });
+
   it('closes on Escape and returns to the dashboard', async () => {
     const { user } = renderApp('/admin/dashboard');
     await openDetails(user);
