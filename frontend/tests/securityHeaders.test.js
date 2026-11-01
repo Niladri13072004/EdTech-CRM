@@ -41,11 +41,21 @@ describe('production security headers (vercel.json)', () => {
   });
 
   it('serves the SPA for client routes but not for built assets', () => {
-    const [rewrite] = vercelConfig.rewrites;
-    const pattern = new RegExp(
-      `^${rewrite.source.replace('/((?!', '/(?!(').replace(').*)', ')).*')}$`,
+    const apiRewrite = vercelConfig.rewrites.find(({ source }) => source === '/api/:path*');
+    const spaRewrite = vercelConfig.rewrites.find(
+      ({ destination }) => destination === '/index.html',
     );
-    expect(rewrite.destination).toBe('/index.html');
+
+    expect(apiRewrite).toBeDefined();
+    expect(apiRewrite.destination).toMatch(/^https:\/\/.+\/api\/:path\*$/);
+    expect(vercelConfig.rewrites.indexOf(apiRewrite)).toBeLessThan(
+      vercelConfig.rewrites.indexOf(spaRewrite),
+    );
+    expect(spaRewrite).toBeDefined();
+
+    const pattern = new RegExp(
+      `^${spaRewrite.source.replace('/((?!', '/(?!(').replace(').*)', ')).*')}$`,
+    );
     expect(pattern.test('/admin/dashboard')).toBe(true);
     expect(pattern.test('/assets/index-abc.js')).toBe(false);
   });
