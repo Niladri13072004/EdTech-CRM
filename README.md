@@ -1,14 +1,29 @@
 # EdTech CRM & Inquiry Management System
 
-A CRM for an education provider. Parents, students and schools submit inquiries (scholarships, concerts, admissions, general questions) through a public form. Staff sign in to a protected dashboard to search, filter, review, export and update those inquiries.
+This project handles the inquiry workflow for a school team, from a public question through staff follow-up. Parents, students, and schools submit scholarship, concert, admission, or general inquiries; administrators review the queue, assign ownership, leave internal notes, set follow-ups, and track workflow changes.
 
 - **Frontend:** React 19 + Vite 8 (JavaScript), React Router, Axios, React Hook Form + Zod, Lucide icons
 - **Backend:** Node.js + Express 5, Sequelize 6 with the `pg` driver, Zod, bcrypt, jsonwebtoken
 - **Database:** Supabase PostgreSQL. Supabase is used **only as managed PostgreSQL**: no Supabase Auth, no Supabase client, and the browser never talks to the database.
 - **Authentication:** custom bcrypt password hashes plus a JWT carried in an HttpOnly cookie
-- **Deployment:** a single Render web service (`render.yaml`) that serves the API and the built React app from one origin
+- **Deployment:** Vercel serves the React app and proxies `/api/*` to the Express API on Render; the API connects to Supabase PostgreSQL
 
 More detail: [Architecture](docs/ARCHITECTURE.md)
+
+### Screenshots
+
+The public form is the entry point for families and schools. The sign-in screen is for staff who manage submitted inquiries.
+
+![Public inquiry form](docs/screenshots/inquiry-page.png)
+
+![Administrator sign-in](docs/screenshots/admin-login.png)
+
+### Project decisions
+
+- **Keep database access in the API.** Supabase provides PostgreSQL, while Express owns validation, authorization, and database queries. The browser never connects directly to the database.
+- **Use a same-origin API path in production.** Vercel proxies `/api/*` to Render, so the browser uses the Vercel origin for both pages and API requests and the secure session cookie remains first-party.
+- **Separate notes from workflow history.** Notes are private staff context; activities record workflow events for the inquiry timeline. The timeline is useful operational history, but database permissions do not enforce an immutable audit log.
+- **Keep dashboard state in the URL.** Search, filters, sorting, and pagination can survive a reload and be shared as a link.
 
 ---
 
@@ -62,13 +77,15 @@ More detail: [Architecture](docs/ARCHITECTURE.md)
 ## 2. Architecture
 
 ```
-Browser ──HTTPS──▶ Render web service (Node.js, Express 5)                ──TLS──▶ Supabase PostgreSQL
-                   ├─ /api/*   JSON API (Helmet, CORS allow-list, Zod,              (session pooler,
-                   │           rate limits, cookie JWT auth, CSRF origin check)      certificate verified)
-                   └─ /*       built React app (frontend/dist) + SPA fallback
+Browser ──HTTPS──▶ Vercel (React static app, same-origin /api proxy)
+                   │ /api/*
+                   ▼
+                   Render web service (Node.js, Express 5) ──TLS──▶ Supabase PostgreSQL
+                     JSON API (Helmet, CORS allow-list, Zod,           (session pooler,
+                     rate limits, cookie JWT auth, CSRF origin check)   certificate verified)
 ```
 
-In production, one service serves both the pages and the API, so they share an origin. The session cookie is first-party with `SameSite=Strict`, and no cross-site CORS is involved. In development, Vite serves the React app on port 5173 and proxies `/api` to Express on port 4000, which gives the same origin model.
+In production, Vercel serves the pages and forwards `/api/*` requests to Render. The browser continues to use the Vercel origin, keeping the session cookie first-party with `SameSite=Strict`. In development, Vite serves the React app on port 5173 and proxies `/api` to Express on port 4000.
 
 ### Repository structure
 
@@ -91,9 +108,9 @@ In production, one service serves both the pages and the API, so they share an o
 │   ├── src/                    pages (form, login, dashboard), components, auth, api (Axios), hooks, validation
 │   ├── tests/                  Vitest + Testing Library
 │   ├── vite.config.js          dev proxy, build chunking, preview with production headers
-│   └── vercel.json             security headers + SPA rewrite (optional Vercel deployment)
+│   └── vercel.json             security headers, API proxy, and SPA rewrite
 ├── schema.sql                  database schema (tables, constraints, indexes, trigger, RLS)
-├── render.yaml                 Render Blueprint (single same-origin web service)
+├── render.yaml                 Render Blueprint (API service)
 ├── .env.example                backend configuration template
 └── docs/                       technical documentation
 ```
@@ -112,9 +129,9 @@ In production, one service serves both the pages and the API, so they share an o
 ## 3. Supabase setup
 
 1. Create a project at [supabase.com](https://supabase.com) and keep the database password.
-2. **Connection string:** in **Connect** (or *Project Settings → Database*), copy the **Session pooler** URI:
+2. **Connection string:** in **Connect** (or *Project Settings → Database*), select the **Session pooler** and copy the URI shown for this project. Use the host and username exactly as Supabase provides them; pooler host details vary by project:
    ```
-   postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+   postgresql://<username>:<password>@<session-pooler-host>:5432/postgres
    ```
    Use the pooler, not `db.<ref>.supabase.co`, which is IPv6-only on most plans. Do not add `?sslmode=…`; TLS is configured separately.
 3. **CA certificate:** go to *Project Settings → Database → SSL Configuration → Download certificate*. Supabase signs its certificates with its own root CA, so the backend needs this file to verify the server.
@@ -192,9 +209,9 @@ In a third terminal:
 npm run dev --prefix frontend
 ```
 
-### Same-origin production build locally
+### Serve the production build locally from Express
 
-This serves the built app from Express exactly as on Render. It needs a configured `backend/.env`.
+This optional local setup serves the built app and API from Express on one origin. It needs a configured `backend/.env`.
 
 ```bash
 npm run build --prefix frontend
@@ -217,11 +234,11 @@ The backend reads `backend/.env` (template: [`.env.example`](.env.example)) and 
 | `JWT_SECRET` | **yes** | — | ≥ 32 random characters; the `.env.example` placeholder is refused |
 | `JWT_EXPIRES_IN` | no | `1h` | session length (`15m`, `1h`, `7d`…) |
 | `JWT_ISSUER` / `JWT_AUDIENCE` | no | `edtech-crm-api` / `edtech-crm-admin` | checked on every request |
-| `FRONTEND_URL` | **yes**, except on Render | `RENDER_EXTERNAL_URL` | exact browser origin(s), comma-separated; used for CORS and the CSRF origin check |
+| `FRONTEND_URL` | **yes** | — | exact browser origin(s), comma-separated; used for CORS and the CSRF origin check |
 | `PORT` | no | `4000` | hosting platforms set this |
 | `NODE_ENV` | no | `development` | `production` enables Secure cookies, JSON logs and strict TLS |
 | `SERVE_FRONTEND` / `FRONTEND_DIST_DIR` | no | `false` / `../frontend/dist` | serve the built React app from the API (same-origin deployment) |
-| `TRUST_PROXY` | no | `0` | proxies in front of Express (`1` on Render); a warning is logged if left at 0 in production |
+| `TRUST_PROXY` | no | `0` | trusted proxy hops in front of Express (`2` for Vercel → Render); a warning is logged if left at 0 in production |
 | `BCRYPT_SALT_ROUNDS` | no | `12` | 10–15 |
 | `AUTH_COOKIE_SECURE` / `AUTH_COOKIE_SAMESITE` | no | `true` in production / `strict` | Secure cannot be turned off in production |
 | `LOGIN_RATE_LIMIT_MAX` / `…_WINDOW_MINUTES` | no | `5` / `15` | failed sign-ins per IP |
@@ -396,50 +413,17 @@ Two items are deliberately **not** run in CI and must be run yourself: `npm run 
 
 ## 10. Deployment
 
-### Recommended: one Render web service (`render.yaml`)
+### Current deployment: Vercel frontend + Render API
 
-The Blueprint builds the backend (runtime dependencies only) and the React app, then starts Express with `SERVE_FRONTEND=true`.
-- Pages and `/api` share one origin.
-- Client routes such as `/admin/dashboard` survive a refresh.
-- Unknown `/api/…` paths still return JSON 404s.
-- Hashed assets are cached for a year.
-- The service listens on the `PORT` that Render assigns.
+The production frontend is [edtech-crm-hazel.vercel.app](https://edtech-crm-hazel.vercel.app). Vercel serves the React build and `frontend/vercel.json` forwards `/api/*` to the Render API at `https://edtech-crm-api-niladri13072004.onrender.com`. The API connects to Supabase PostgreSQL using the session pooler and certificate-verified TLS. This keeps browser requests on one origin and the authentication cookie first-party.
 
-1. Prepare Supabase (section 3) and run `schema.sql`.
-2. In Render: **New → Blueprint**, then choose this repository. Render reads `render.yaml`.
-3. When prompted, enter the secret values:
-   - `DATABASE_URL`: the session-pooler URI;
-   - `DATABASE_SSL_CA`: the full PEM text of the Supabase CA certificate.
+`render.yaml` configures the API service, including `TRUST_PROXY=2`, the frontend origin, health check, database TLS mode, and generated JWT secret. `DATABASE_URL` and `DATABASE_SSL_CA` are entered as Render secrets. The Vercel project uses the `frontend` directory and its build settings from `frontend/vercel.json`.
 
-   Render generates `JWT_SECRET` itself, and sets `NODE_ENV=production`, `SERVE_FRONTEND=true` and `TRUST_PROXY=1`. `FRONTEND_URL` defaults to the service URL (`RENDER_EXTERNAL_URL`); set it explicitly only to add a custom domain.
-4. After the first deploy, open the service **Shell** and create an admin:
-   ```bash
-   cd backend && npm run admin:create
-   ```
-5. **Deployment verification:** a Blueprint and successful build establish configuration and code readiness only. Record production verification only after completing these checks against the deployed service and database:
-   - `https://<service>.onrender.com/api/health` returns `{"status":"ok",…}`;
-   - `/api/health/db` reports `"database":"up"`;
-   - confirm all four tables exist and have RLS enabled, then run `npm run db:check --prefix backend` against the deployment database;
-   - create an admin and verify login, session restoration, logout, and rejection after token expiry;
-   - submit an inquiry and verify it appears in the dashboard;
-   - add a note, assign and unassign an admin, update follow-up date and outcome, and confirm the activity timeline;
-   - restart the service and verify database-backed inquiries and notes remain available.
+In production the cookie is `Secure`, `HttpOnly`, `SameSite=Strict` and `__Host-` prefixed (startup refuses `AUTH_COOKIE_SECURE=false`). TLS to the database is certificate-verified. Render's free plan can sleep while idle, so the first request after a pause may take longer.
 
-**Verification status:** this repository contains no record of a Supabase connection check or live Render smoke test. That does not establish whether checks were performed manually. Do not mark production verified until the checks above have been run against the real deployment and their date and results recorded here.
+**Checks completed:** the deployed Render API returned a healthy response, including through the Vercel `/api` proxy, and the Render startup log confirmed a certificate-verified Supabase database connection. This confirms basic service and database connectivity, not the full production workflow.
 
-In production the cookie is `Secure`, `HttpOnly`, `SameSite=Strict` and `__Host-` prefixed (startup refuses `AUTH_COOKIE_SECURE=false`). TLS to the database is certificate-verified, and `DATABASE_URL` and `JWT_SECRET` come only from Render's environment. Render's free plan sleeps when idle, so the first request after a pause can take 30–60 seconds; the frontend allows 30 seconds per request.
-
-### Alternative: Vercel frontend + Render API
-
-`frontend/vercel.json` already sends the security headers and the SPA fallback. To use Vercel for the frontend:
-1. Deploy only the API to Render, with `SERVE_FRONTEND` unset.
-2. In `frontend/vercel.json`, add an `/api` rewrite **before** the SPA rewrite. The browser then talks only to Vercel, so the cookie stays first-party:
-   ```json
-   { "source": "/api/:path*", "destination": "https://<your-render-service>.onrender.com/api/:path*" }
-   ```
-3. On Render, set `FRONTEND_URL=https://<your-app>.vercel.app` (the CSRF origin check uses it) and `TRUST_PROXY=2` (Vercel plus Render).
-
-Calling the API cross-site without a rewrite is **not recommended**. It would need `AUTH_COOKIE_SAMESITE=none` and `VITE_API_BASE_URL`, and browsers that block third-party cookies (Safari by default) would drop the session.
+**Still to verify:** inspect all four tables and RLS settings on the deployed project; test admin creation, login, session restoration, logout and session expiry; submit an inquiry; test notes, assignment, follow-up updates and activity history; and confirm persisted records remain available after a Render restart. A deployment should not be described as fully smoke-tested until these flows are checked against production.
 
 ---
 
@@ -464,7 +448,7 @@ Calling the API cross-site without a rewrite is **not recommended**. It would ne
 
 ## 12. Known limitations
 
-- **Deployment status:** this repository contains no record of Supabase connectivity or live deployment smoke tests. See the verification checklist in section 10; a Render Blueprint is not evidence that production was smoke-tested.
+- **Deployment status:** basic deployed API health and Supabase connectivity have been checked. The complete administrator and inquiry workflow listed in section 10 has not been recorded as smoke-tested.
 - **Schema checker scope:** `db:check` checks tables, columns, supported PostgreSQL types, nullability, and RLS. It does not fully compare foreign keys, unique/check constraints, index definitions, or default expressions, and unsupported Sequelize types are skipped.
 - **Single instance:** logout revocation and rate limits use in-memory stores. Restarting clears revoked-token records, so a logged-out token may work again until expiry (at most `JWT_EXPIRES_IN`); multiple instances do not share revocations or rate-limit counters. A shared store is needed if the service scales beyond one instance.
 - **Activity timeline is not a database-enforced audit log:** application code only inserts activity rows, but the database role and schema do not prevent UPDATE or DELETE. Inquiry deletion also cascades to its notes and activities. Restricting database permissions or adding enforcement is a separate hardening step.

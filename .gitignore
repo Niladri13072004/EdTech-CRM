@@ -45,6 +45,9 @@ coverage/
 *.tsbuildinfo
 graphify-out/
 
+# Ignore untracked GitHub Actions workflow files. Already tracked workflows
+# remain tracked and continue to run until explicitly removed from Git.
+/.github/workflows/
 
 
 # Local browser tooling artifacts
