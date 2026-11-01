@@ -52,11 +52,7 @@ const configuredFrontendOrigins = (process.env.FRONTEND_URL ?? '')
   .map((origin) => origin.trim())
   .filter(Boolean);
 process.env.FRONTEND_URL = [
-  ...new Set([
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    ...configuredFrontendOrigins,
-  ]),
+  ...new Set(['http://localhost:5173', 'http://127.0.0.1:5173', ...configuredFrontendOrigins]),
 ].join(',');
 
 const secret = process.env.JWT_SECRET ?? '';
