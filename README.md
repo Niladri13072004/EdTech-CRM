@@ -47,6 +47,7 @@ More detail: [Architecture](docs/ARCHITECTURE.md)
 ### Dashboard
 
 - **Status management** (New / In Progress / Resolved) from the table, with confirmation messages.
+- **Inquiry details drawer** with the full message, internal notes, assignment controls, follow-up date and outcome, and an activity timeline.
 - **Pagination** on the server (20 per page by default), plus sorting by date or name.
 - **Summary cards** (total, New, In progress, Resolved) and a **category bar chart**, counted in the database. Clicking a card or a bar filters the table.
 - **CSV export** of the current filtered results. Values are escaped, spreadsheet formulas are neutralized, and only inquiry fields are included.
@@ -100,7 +101,9 @@ In production, one service serves both the pages and the API, so they share an o
 ### Data model (`schema.sql`)
 
 - **`admins`**: `id` uuid PK, `email` unique (stored lower-case), `password_hash` (a CHECK accepts only bcrypt hashes), `created_at`.
-- **`inquiries`**: `id`, `name`, `email`, `phone` (text), `user_type` and `category` (CHECK allow-lists), `message`, `status` (CHECK New / In Progress / Resolved, default New), `created_at`, `updated_at` (kept current by a trigger).
+- **`inquiries`**: `id`, `name`, `email`, `phone` (text), `user_type` and `category` (CHECK allow-lists), `message`, `status` (CHECK New / In Progress / Resolved, default New), nullable `assigned_admin_id` (FK to `admins`, set null on admin deletion), `follow_up_date`, `follow_up_outcome`, `created_at`, and `updated_at` (kept current by a trigger).
+- **`inquiry_notes`**: internal note body, owning `inquiry_id` (cascade-deleted with the inquiry), optional `admin_id` (set null if the admin is deleted), author email snapshot, and `created_at`.
+- **`inquiry_activities`**: event type, summary, owning `inquiry_id` (cascade-deleted with the inquiry), optional `admin_id` (set null if the admin is deleted), optional actor email snapshot, and `created_at`. Activity rows are used for the detail timeline; database permissions do not enforce append-only behavior.
 - **Indexes:** creation date, category + date, and user type + date.
 - **Row Level Security** is enabled with no policies, so Supabase's public REST API cannot read any of the four tables. The backend connects as the table owner and is unaffected.
 
@@ -267,8 +270,23 @@ All responses are JSON unless noted. Errors look like `{ "success": false, "erro
 | GET | `/api/inquiries` | admin | list: `category`, `userType`, `status`, `search` (name or phone), `page`, `pageSize` (≤ 100, default 20), `sortBy` (`createdAt`, `name`, `category`, `userType`, `status`), `sortDir` (`asc`, `desc`) → `{ data, meta: { page, pageSize, total, totalPages, hasNextPage, hasPreviousPage, … } }` |
 | GET | `/api/inquiries/stats` | admin | `{ total, byStatus, byCategory }`, counted in the database |
 | GET | `/api/inquiries/export` | admin | same filters and sort as the list → `text/csv` download (at most 5000 rows, otherwise 422) |
-| GET | `/api/inquiries/:id` | admin | one inquiry, including the message |
+| GET | `/api/inquiries/assignable-admins` | admin | no query parameters → `{ success: true, data: [{ id, email }] }` |
+| GET | `/api/inquiries/:id` | admin | one inquiry, including the message, assigned admin, notes, and activity timeline → `{ success: true, data: inquiry }` |
+| POST | `/api/inquiries/:id/notes` | admin, origin-checked | `{ "body": "Call scheduled with the parent." }` → `201 { success, message, data: { id, body, admin: { id, email }, createdAt } }` |
+| PATCH | `/api/inquiries/:id` | admin, origin-checked | one or more of `status`, `assignedAdminId`, `followUpDate`, `followUpOutcome` → `{ success, message, data: inquiry }` with the refreshed detail structure |
 | PATCH | `/api/inquiries/:id/status` | admin, origin-checked | `{ "status": "New" \| "In Progress" \| "Resolved" }` → updated inquiry |
+
+For `PATCH /api/inquiries/:id`, `assignedAdminId` is a UUID or `null`, `followUpDate` is a real `YYYY-MM-DD` calendar date or `null`, and `followUpOutcome` is text up to 2000 characters or `null`. Empty strings clear nullable fields. Unknown fields are rejected, and at least one supported field is required. For example:
+
+```json
+{
+  "assignedAdminId": "8f8e5efa-87ed-449e-a046-a8cac7f2faef",
+  "followUpDate": "2026-11-15",
+  "followUpOutcome": "Meeting booked"
+}
+```
+
+The detail response includes `assignedAdmin` (`{ id, email }` or `null`), `notes` (each with `id`, `body`, `admin`, and `createdAt`), and `activities` (each with `id`, `type`, `summary`, actor fields, and `createdAt`). The initial “Inquiry received” timeline item is synthesized from the inquiry record; subsequent activity rows are stored in `inquiry_activities`.
 
 **Public form validation:**
 - every field is trimmed;
@@ -398,12 +416,16 @@ The Blueprint builds the backend (runtime dependencies only) and the React app, 
    ```bash
    cd backend && npm run admin:create
    ```
-5. **Smoke test:**
+5. **Deployment verification:** a Blueprint and successful build establish configuration and code readiness only. Record production verification only after completing these checks against the deployed service and database:
    - `https://<service>.onrender.com/api/health` returns `{"status":"ok",…}`;
    - `/api/health/db` reports `"database":"up"`;
-   - the form at `/` submits;
-   - signing in at `/login` works;
-   - the dashboard lists the submitted inquiry.
+   - confirm all four tables exist and have RLS enabled, then run `npm run db:check --prefix backend` against the deployment database;
+   - create an admin and verify login, session restoration, logout, and rejection after token expiry;
+   - submit an inquiry and verify it appears in the dashboard;
+   - add a note, assign and unassign an admin, update follow-up date and outcome, and confirm the activity timeline;
+   - restart the service and verify database-backed inquiries and notes remain available.
+
+**Verification status:** this repository contains no record of a Supabase connection check or live Render smoke test. That does not establish whether checks were performed manually. Do not mark production verified until the checks above have been run against the real deployment and their date and results recorded here.
 
 In production the cookie is `Secure`, `HttpOnly`, `SameSite=Strict` and `__Host-` prefixed (startup refuses `AUTH_COOKIE_SECURE=false`). TLS to the database is certificate-verified, and `DATABASE_URL` and `JWT_SECRET` come only from Render's environment. Render's free plan sleeps when idle, so the first request after a pause can take 30–60 seconds; the frontend allows 30 seconds per request.
 
@@ -442,8 +464,10 @@ Calling the API cross-site without a rewrite is **not recommended**. It would ne
 
 ## 12. Known limitations
 
-- **Not verified on Supabase or live hosting:** tests and local runs use PostgreSQL through PGlite. A real Supabase connection and a live deployment still need your credentials and accounts.
-- **Single instance:** logout revocation and rate limits are kept in memory. After a restart, a logged-out token works again until it expires (at most `JWT_EXPIRES_IN`). Running several instances would need a shared store.
+- **Deployment status:** this repository contains no record of Supabase connectivity or live deployment smoke tests. See the verification checklist in section 10; a Render Blueprint is not evidence that production was smoke-tested.
+- **Schema checker scope:** `db:check` checks tables, columns, supported PostgreSQL types, nullability, and RLS. It does not fully compare foreign keys, unique/check constraints, index definitions, or default expressions, and unsupported Sequelize types are skipped.
+- **Single instance:** logout revocation and rate limits use in-memory stores. Restarting clears revoked-token records, so a logged-out token may work again until expiry (at most `JWT_EXPIRES_IN`); multiple instances do not share revocations or rate-limit counters. A shared store is needed if the service scales beyond one instance.
+- **Activity timeline is not a database-enforced audit log:** application code only inserts activity rows, but the database role and schema do not prevent UPDATE or DELETE. Inquiry deletion also cascades to its notes and activities. Restricting database permissions or adding enforcement is a separate hardening step.
 - **One role:** there is a single admin role, so admin management (password change, deletion) is done through the scripts or the database.
 - **Summary totals are unfiltered:** the summary cards and chart always cover all inquiries; only the table follows the filters.
 - **Export cap:** CSV export stops at 5000 rows; narrow the filters for larger exports.
