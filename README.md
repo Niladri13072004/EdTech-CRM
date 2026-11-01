@@ -10,12 +10,6 @@ This project handles the inquiry workflow for a school team, from a public quest
 
 More detail: [Architecture](docs/ARCHITECTURE.md)
 
-### Project origin and contributions
-
-This repository began as a clone of [Twishamp Mandal's EdTech CRM & Inquiry System](https://github.com/twishamp2024/EdTech-CRM-and-Inquiry-System), and the original commit history is retained. The initial public inquiry flow, custom admin authentication, dashboard, and first deployment setup came from that project.
-
-My commits build on that starting point. They add the inquiry details drawer with internal notes, assignment, follow-ups, and activity history; expanded schema checks and CI; the Vercel frontend and Render API deployment configuration; and additional tests, setup guidance, deployment documentation, and screenshots. The commit history shows the sequence and authorship of these changes.
-
 ### Screenshots
 
 The public form is the entry point for families and schools. The sign-in screen is for staff who manage submitted inquiries.
