@@ -44,7 +44,20 @@ Object.assign(process.env, {
   DATABASE_SSL_MODE: 'disable',
   DATABASE_CONNECT_RETRIES: '0',
 });
-process.env.FRONTEND_URL ||= 'http://localhost:5173';
+// Browsers may reach the same local Vite server through either hostname.
+// Allow both exact origins in memory mode to avoid a confusing CORS failure
+// when the browser address uses 127.0.0.1 but the default uses localhost.
+const configuredFrontendOrigins = (process.env.FRONTEND_URL ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+process.env.FRONTEND_URL = [
+  ...new Set([
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    ...configuredFrontendOrigins,
+  ]),
+].join(',');
 
 const secret = process.env.JWT_SECRET ?? '';
 const ephemeralSecret = secret.length < 32 || secret.startsWith('replace-with');
