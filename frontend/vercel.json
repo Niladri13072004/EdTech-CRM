@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://edtech-crm-api-niladri13072004.onrender.com/api/:path*"
+    },
+    {
       "source": "/((?!assets/|favicon\\.svg).*)",
       "destination": "/index.html"
     }
