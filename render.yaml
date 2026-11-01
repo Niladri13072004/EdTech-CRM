@@ -35,4 +35,4 @@ services:
         sync: false
       # Vercel production origin, used by CORS and the CSRF origin check.
       - key: FRONTEND_URL
-        sync: false
+        value: https://edtech-crm-hazel.vercel.app
